@@ -3,49 +3,126 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Điều Khiển LED Từ Xa</title>
+    <title>Hệ Thống Thông Minh ESP32</title>
     <style>
-        body { font-family: Arial, sans-serif; background-color: #f4f7f6; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-        .card { background: white; padding: 30px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); text-align: center; }
-        button { padding: 15px 30px; font-size: 18px; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; color: white; margin: 10px; width: 120px; }
+        body { font-family: Arial, sans-serif; background-color: #f4f7f6; display: flex; flex-direction: column; align-items: center; padding: 20px; margin: 0; }
+        .dashboard { display: flex; flex-wrap: wrap; gap: 20px; justify-content: center; max-width: 900px; }
+        .card { background: white; padding: 25px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); text-align: center; width: 260px; }
+        h2 { color: #333; font-size: 20px; margin-top: 0; margin-bottom: 20px; }
+        .value { font-size: 45px; font-weight: bold; color: #ffb800; margin: 15px 0; }
+        .status { margin-top: 15px; font-size: 14px; color: #666; font-weight: bold; }
+        
+        button { padding: 12px; font-size: 16px; font-weight: bold; border: none; border-radius: 8px; cursor: pointer; color: white; margin: 5px; width: 45%; transition: 0.2s; }
+        button:active { transform: scale(0.95); }
+        /* Định dạng khi nút bị khóa (Chế độ tự động) */
+        button:disabled { background-color: #ccc !important; cursor: not-allowed; transform: none !important; }
+        
         .btn-on { background-color: #28a745; }
         .btn-off { background-color: #dc3545; }
-        #status { margin-top: 20px; font-size: 16px; color: #555; font-weight: bold; }
+        .btn-auto { background-color: #17a2b8; }
+        .btn-manual { background-color: #fd7e14; }
     </style>
 </head>
 <body>
-    <div class="card">
-        <h2>💡 Bảng Điều Khiển LED</h2>
-        <div>
-            <button class="btn-on" onclick="setLed(1)">BẬT</button>
-            <button class="btn-off" onclick="setLed(0)">TẮT</button>
+    <h1 style="color: #333; margin-bottom: 30px; text-align: center;">BẢNG ĐIỀU KHIỂN NHÀ THÔNG MINH</h1>
+    
+    <div class="dashboard">
+        <!-- Thẻ 1: Độ Sáng -->
+        <div class="card">
+            <h2>☀️ Cảm Biến Ánh Sáng</h2>
+            <div id="lightValue" class="value">--%</div>
+            <div class="status">Cập nhật liên tục...</div>
         </div>
-        <div id="status">Đang kết nối hệ thống...</div>
+
+        <!-- Thẻ 2: Chế Độ -->
+        <div class="card">
+            <h2>⚙️ Chế Độ Hoạt Động</h2>
+            <div style="display: flex; justify-content: center;">
+                <button class="btn-manual" onclick="setMode(0)">THỦ CÔNG</button>
+                <button class="btn-auto" onclick="setMode(1)">TỰ ĐỘNG</button>
+            </div>
+            <div id="modeStatus" class="status" style="color: #007bff; font-size: 16px;">Đang tải...</div>
+        </div>
+
+        <!-- Thẻ 3: Điều Khiển LED -->
+        <div class="card">
+            <h2>💡 Công Tắc LED</h2>
+            <div style="display: flex; justify-content: center;">
+                <button id="btnLedOn" class="btn-on" onclick="setLed(1)">BẬT</button>
+                <button id="btnLedOff" class="btn-off" onclick="setLed(0)">TẮT</button>
+            </div>
+            <div id="ledStatus" class="status">Đang kết nối...</div>
+        </div>
     </div>
 
     <script>
-        const FIREBASE_URL = "https://huhu-b8feb-default-rtdb.asia-southeast1.firebasedatabase.app/Led.json?auth=UUXzA3vlvd6TCvL06HK3l32XxQoMJMp1T5piRjQ8";
+        const FIREBASE_BASE_URL = "https://huhu-b8feb-default-rtdb.asia-southeast1.firebasedatabase.app";
+        const AUTH = "?auth=UUXzA3vlvd6TCvL06HK3l32XxQoMJMp1T5piRjQ8";
+        
+        const urlLed = FIREBASE_BASE_URL + "/Led.json" + AUTH;
+        const urlLight = FIREBASE_BASE_URL + "/AnhSang.json" + AUTH;
+        const urlMode = FIREBASE_BASE_URL + "/CheDo.json" + AUTH;
 
-        async function setLed(state) {
-            document.getElementById("status").innerText = "Đang gửi lệnh...";
+        // Hàm chuyển đổi chế độ (0: Thủ công, 1: Tự động)
+        async function setMode(mode) {
+            document.getElementById("modeStatus").innerText = "Đang chuyển...";
             try {
-                await fetch(FIREBASE_URL, { method: 'PUT', body: JSON.stringify(state) });
-                document.getElementById("status").innerText = state === 1 ? "Trạng thái: ĐANG BẬT 🟢" : "Trạng thái: ĐANG TẮT 🔴";
-            } catch (e) {
-                document.getElementById("status").innerText = "Lỗi mạng!";
+                await fetch(urlMode, { method: 'PUT', body: JSON.stringify(mode) });
+                updateUI(mode);
+            } catch (e) {}
+        }
+
+        // Hàm gửi lệnh BẬT/TẮT LED thủ công
+        async function setLed(state) {
+            document.getElementById("ledStatus").innerText = "Đang gửi lệnh...";
+            try {
+                await fetch(urlLed, { method: 'PUT', body: JSON.stringify(state) });
+            } catch (e) {}
+        }
+
+        // Hàm khóa/mở khóa nút bấm theo chế độ
+        function updateUI(mode) {
+            if (mode === 1) {
+                document.getElementById("modeStatus").innerText = "Chế độ hiện tại: TỰ ĐỘNG 🤖";
+                document.getElementById("btnLedOn").disabled = true;
+                document.getElementById("btnLedOff").disabled = true;
+                document.getElementById("ledStatus").innerText = "Hệ thống đang tự quyết định";
+            } else {
+                document.getElementById("modeStatus").innerText = "Chế độ hiện tại: THỦ CÔNG 🖐️";
+                document.getElementById("btnLedOn").disabled = false;
+                document.getElementById("btnLedOff").disabled = false;
             }
         }
 
-        async function getLed() {
+        // Hàm tải dữ liệu định kỳ từ Firebase về Web
+        async function fetchData() {
             try {
-                let res = await fetch(FIREBASE_URL);
-                let state = await res.json();
-                document.getElementById("status").innerText = state === 1 ? "Trạng thái: ĐANG BẬT 🟢" : "Trạng thái: ĐANG TẮT 🔴";
+                // Đọc Chế độ
+                let resMode = await fetch(urlMode);
+                let mode = await resMode.json();
+                if(mode !== null) updateUI(mode);
+
+                // Đọc LED
+                let resLed = await fetch(urlLed);
+                let ledState = await resLed.json();
+                if(ledState !== null && mode === 0) {
+                    document.getElementById("ledStatus").innerText = ledState === 1 ? "Trạng thái: ĐANG SÁNG 🟢" : "Trạng thái: ĐANG TẮT 🔴";
+                } else if (ledState !== null && mode === 1) {
+                    document.getElementById("ledStatus").innerText = ledState === 1 ? "Tự động: ĐANG SÁNG 🟢" : "Tự động: ĐANG TẮT 🔴";
+                }
+
+                // Đọc Ánh sáng
+                let resLight = await fetch(urlLight);
+                let light = await resLight.json();
+                if (light !== null) {
+                    document.getElementById("lightValue").innerText = light + "%";
+                }
             } catch (e) {}
         }
         
-        getLed();
-        setInterval(getLed, 2000);
+        // Khởi chạy ngay và lặp lại liên tục
+        fetchData();
+        setInterval(fetchData, 1500); 
     </script>
 </body>
 </html>
